@@ -2,6 +2,7 @@
 #define _PNG_WRAPPER
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*
@@ -84,6 +85,8 @@ struct CHUNK
 bool read_IDHR(int fd, struct CHUNK* chunk);
 bool read_IEND(int fd, struct CHUNK* chunk);
 bool read_IDAT(int fd, struct CHUNK* chunk);
+void get_IDAT_header(uint8_t* data, size_t chunk_length);
 
+uint32_t swap_endian32(uint32_t num);
 
 #endif // _PNG_WRAPPER

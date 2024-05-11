@@ -4,12 +4,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#define FILE "./good_idat_multiple.png"
 
 #define HASH_STR(CHK_STR) (((CHK_STR[0] << 8) + CHK_STR[1]) % 84)
 #define HASH_UINT(CHK_UINT) (((CHK_UINT) >> 16) % 84)
 
+bool IDAT_HEADER = 0;
 
 // if error: print error, set errno to 0 and return true
 bool check_failture() // i think misspeak
@@ -29,7 +33,7 @@ static void* chunk_lookup[] = {
     [65] = (void*)read_IDAT,
 };
 
-uint32_t swap_endian(uint32_t num)
+uint32_t swap_endian32(uint32_t num)
 {
     return ((num >> 24) & 0xff) | // move byte 3 to byte 0
     ((num << 8) & 0xff0000) |     // move byte 1 to byte 2
@@ -50,7 +54,7 @@ int get_size(int fd)
 {
     uint32_t size;
     read(fd, &size, 4);
-    size = swap_endian(size);
+    size = swap_endian32(size);
     if(PNG_VERBOSE > 1)
         printf("Next chunck size: %u bytes\n", size);
     return size;
@@ -76,14 +80,20 @@ bool read_header(int fd, struct file_header* header)
 bool read_IDAT(int fd, struct CHUNK* chunk)
 {
     chunk->chunk_type = IDAT;
-    struct IDAT* idat= &chunk->chunk_data.idat;
-    uint8_t buff[chunk->length];
-    read(fd, &buff, chunk->length);
+    struct IDAT* idat = &chunk->chunk_data.idat;
+    uint8_t* buff     = malloc(sizeof(uint8_t) * chunk->length);
+    read(fd, buff, chunk->length);
     if(PNG_VERBOSE)
     {
         puts("\e[1m[IDAT Chunk]\e[0m");
         printf("| Size: %u bytes\n", chunk->length);
     }
+    if(!IDAT_HEADER)
+    {
+        get_IDAT_header(buff, chunk->length);
+        IDAT_HEADER = 1;
+    }
+    free(buff);
     return check_failture();
 }
 
@@ -91,7 +101,7 @@ bool read_IDAT(int fd, struct CHUNK* chunk)
 bool read_IEND(int fd, struct CHUNK* chunk)
 {
     chunk->chunk_type = IEND;
-    struct IEND* iend= &chunk->chunk_data.iend;
+    struct IEND* iend = &chunk->chunk_data.iend;
     if(PNG_VERBOSE)
     {
         puts("\e[1m[IEND Chunk]\e[0m");
@@ -106,8 +116,8 @@ bool read_IDHR(int fd, struct CHUNK* chunk)
     if(PNG_VERBOSE)
     {
         puts("\e[1m[IHDR Chunk]\e[0m");
-        printf("| Width: %u \n", swap_endian(ihdr->width));
-        printf("| Height: %u \n", swap_endian(ihdr->height));
+        printf("| Width: %u \n", swap_endian32(ihdr->width));
+        printf("| Height: %u \n", swap_endian32(ihdr->height));
         printf("| Bit depth: %.1x\n", ihdr->bit_depth);
         printf("| Color type: %.1x\n", ihdr->color_type);
         printf("| Compression method: %.1x\n", ihdr->compression_method);
@@ -144,7 +154,7 @@ bool read_chunk(int fd)
     // CRC
     read(fd, &crc, 4);
     if(PNG_VERBOSE > 1)
-        printf("CRC-32: %#x\n", swap_endian(crc));
+        printf("CRC-32: %#x\n", swap_endian32(crc));
     return (chunk.length > 0);
     /*
      * add chunk to chunck array ?
@@ -157,7 +167,7 @@ int main()
     int fd;
     struct file_header header;
     struct IHDR ihdr;
-    if(png_open("file.png", &fd))
+    if(png_open(FILE, &fd))
         goto exit;
     if(read_header(fd, &header))
         goto exit;

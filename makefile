@@ -1,2 +1,2 @@
 all:
-	gcc ./png.c -o main
+	gcc *.c -o main
